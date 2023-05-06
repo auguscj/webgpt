@@ -46,7 +46,7 @@ def check_count(username):
     userinfo = storage_str.split("|")
     left_count = userinfo[2]
     if int(left_count)<=0:
-        return False,"您余额不足啦,需要充值次数后方可使用,谢谢"
+        return False,"对不起,因为调用ChatGPT api也是需要收费的,作者无力承担,所以免费体验次数有限,需要充值才可继续使用,10块50次询问,50块400次,100块1000次.充值用户可以使用我们的企业微信ChatGPT和app版本ChatGPT,我们致力于提供持久稳定的ChatGPT服务"
     else:
         return True,"成功"
 
