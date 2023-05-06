@@ -144,3 +144,4 @@ auth.json
 lora/
 .idea
 templates/*
+assets/
