@@ -13,18 +13,10 @@ var user_input_tb = null;
 var userInfoDiv = null;
 var appTitleDiv = null;
 var chatbot = null;
-var chatbotWrap = null;
 var apSwitch = null;
-var empty_botton = null;
 var messageBotDivs = null;
 var renderLatex = null;
-var loginUserForm = null;
-var logginUser = null;
-
-var userLogged = false;
-var usernameGotten = false;
 var shouldRenderLatex = false;
-var historyLoaded = false;
 
 var ga = document.getElementsByTagName("gradio-app");
 var targetNode = ga[0];
@@ -34,21 +26,13 @@ var isInIframe = (window.self !== window.top);
 function gradioLoaded(mutations) {
     for (var i = 0; i < mutations.length; i++) {
         if (mutations[i].addedNodes.length) {
-            loginUserForm = document.querySelector(".gradio-container > .main > .wrap > .panel > .form")
             gradioContainer = document.querySelector(".gradio-container");
             user_input_tb = document.getElementById('user_input_tb');
             userInfoDiv = document.getElementById("user_info");
             appTitleDiv = document.getElementById("app_title");
             chatbot = document.querySelector('#chuanhu_chatbot');
-            chatbotWrap = document.querySelector('#chuanhu_chatbot > .wrap');
             apSwitch = document.querySelector('.apSwitch input[type="checkbox"]');
             renderLatex = document.querySelector("#render_latex_checkbox > label > input");
-            empty_botton = document.getElementById("empty_btn")
-
-            if (loginUserForm) {
-                localStorage.setItem("userLogged", true);
-                userLogged = true;
-            }
 
             if (gradioContainer && apSwitch) {  // gradioCainter 加载出来了没?
                 adjustDarkMode();
@@ -57,26 +41,14 @@ function gradioLoaded(mutations) {
                 selectHistory();
             }
             if (userInfoDiv && appTitleDiv) {  // userInfoDiv 和 appTitleDiv 加载出来了没?
-                if (!usernameGotten) {
-                    getUserInfo();
-                }
                 setTimeout(showOrHideUserInfo(), 2000);
             }
             if (chatbot) {  // chatbot 加载出来了没?
                 setChatbotHeight();
             }
-            if (chatbotWrap) {
-                if (!historyLoaded) {
-                    loadHistoryHtml();
-                }
-                setChatbotScroll();
-            }
             if (renderLatex) {  // renderLatex 加载出来了没?
                 shouldRenderLatex = renderLatex.checked;
                 updateMathJax();
-            }
-            if (empty_botton) {
-                emptyHistory();
             }
         }
     }
@@ -127,34 +99,6 @@ function selectHistory() {
                 }
             }
         });
-    }
-}
-
-var username = null;
-function getUserInfo() {
-    if (usernameGotten) {
-        return;
-    }
-    userLogged = localStorage.getItem('userLogged');
-    if (userLogged) {
-        username = userInfoDiv.innerText;
-        if (username) {
-            if (username.includes("getting user info…")) {
-                setTimeout(getUserInfo, 500);
-                return;
-            } else if (username === " ") {
-                localStorage.removeItem("username");
-                localStorage.removeItem("userLogged")
-                userLogged = false;
-                usernameGotten = true;
-                return;
-            } else {
-                username = username.match(/User:\s*(.*)/)[1] || username;
-                localStorage.setItem("username", username);
-                usernameGotten = true;
-                clearHistoryHtml();
-            }
-        }
     }
 }
 
@@ -272,125 +216,12 @@ function setChatbotHeight() {
         }
     }
 }
-function setChatbotScroll() {
-    var scrollHeight = chatbotWrap.scrollHeight;
-    chatbotWrap.scrollTo(0,scrollHeight)
-}
-
-function addChuanhuButton(botElement) {
-    var rawMessage = null;
-    var mdMessage = null;
-    rawMessage = botElement.querySelector('.raw-message');
-    mdMessage = botElement.querySelector('.md-message');
-    if (!rawMessage) {
-        var buttons = botElement.querySelectorAll('button.chuanhu-btn');
-        for (var i = 0; i < buttons.length; i++) {
-            buttons[i].parentNode.removeChild(buttons[i]);
-        }
-        return;
-    }
-    var copyButton = null;
-    var toggleButton = null;
-    copyButton = botElement.querySelector('button.copy-bot-btn');
-    toggleButton = botElement.querySelector('button.toggle-md-btn');
-    if (copyButton) copyButton.remove();
-    if (toggleButton) toggleButton.remove();
-
-    // Copy bot button
-    var copyButton = document.createElement('button');
-    copyButton.classList.add('chuanhu-btn');
-    copyButton.classList.add('copy-bot-btn');
-    copyButton.setAttribute('aria-label', 'Copy');
-    copyButton.innerHTML = copyIcon;
-    copyButton.addEventListener('click', () => {
-        const textToCopy = rawMessage.innerText;
-        navigator.clipboard
-            .writeText(textToCopy)
-            .then(() => {
-                copyButton.innerHTML = copiedIcon;
-                setTimeout(() => {
-                    copyButton.innerHTML = copyIcon;
-                }, 1500);
-            })
-            .catch(() => {
-                console.error("copy failed");
-            });
-    });
-    botElement.appendChild(copyButton);
-
-    // Toggle button
-    var toggleButton = document.createElement('button');
-    toggleButton.classList.add('chuanhu-btn');
-    toggleButton.classList.add('toggle-md-btn');
-    toggleButton.setAttribute('aria-label', 'Toggle');
-    var renderMarkdown = mdMessage.classList.contains('hideM');
-    toggleButton.innerHTML = renderMarkdown ? mdIcon : rawIcon;
-    toggleButton.addEventListener('click', () => {
-        renderMarkdown = mdMessage.classList.contains('hideM');
-        if (renderMarkdown){
-            renderMarkdownText(botElement);
-            toggleButton.innerHTML=rawIcon;
-        } else {
-            removeMarkdownText(botElement);
-            toggleButton.innerHTML=mdIcon;
-        }
-    });
-    botElement.insertBefore(toggleButton, copyButton);
-}
-
-function addCopyCodeButton(pre) {
-    var code = null;
-    var firstChild = null;
-    code = pre.querySelector('code');
-    if (!code) return;
-    firstChild = code.querySelector('div');
-    if (!firstChild) return;
-    var oldCopyButton = null;
-    oldCopyButton = code.querySelector('button.copy-code-btn');
-    // if (oldCopyButton) oldCopyButton.remove();
-    if (oldCopyButton) return; // 没太有用，新生成的对话中始终会被pre覆盖，导致按钮消失，这段代码不启用……
-    var codeButton = document.createElement('button');
-    codeButton.classList.add('copy-code-btn');
-    codeButton.textContent = '\uD83D\uDCCE';
-
-    code.insertBefore(codeButton, firstChild);
-    codeButton.addEventListener('click', function () {
-        var range = document.createRange();
-        range.selectNodeContents(code);
-        range.setStartBefore(firstChild);
-        navigator.clipboard
-            .writeText(range.toString())
-            .then(() => {
-                codeButton.textContent = '\u2714';
-                setTimeout(function () {
-                    codeButton.textContent = '\uD83D\uDCCE';
-                }, 2000);
-            })
-            .catch(e => {
-                console.error(e);
-                codeButton.textContent = '\u2716';
-            });
-    });
-}
-
-function renderMarkdownText(message) {
-    var mdDiv = message.querySelector('.md-message');
-    if (mdDiv) mdDiv.classList.remove('hideM');
-    var rawDiv = message.querySelector('.raw-message');
-    if (rawDiv) rawDiv.classList.add('hideM');
-}
-function removeMarkdownText(message) {
-    var rawDiv = message.querySelector('.raw-message');
-    if (rawDiv) rawDiv.classList.remove('hideM');
-    var mdDiv = message.querySelector('.md-message');
-    if (mdDiv) mdDiv.classList.add('hideM');
-}
 
 var rendertime = 0; // for debugging
 var mathjaxUpdated = false;
 
 function renderMathJax() {
-    messageBotDivs = document.querySelectorAll('.message.bot .md-message');
+    messageBotDivs = document.querySelectorAll('.message.bot');
     for (var i = 0; i < messageBotDivs.length; i++) {
         var mathJaxSpan = messageBotDivs[i].querySelector('.MathJax_Preview');
         if (!mathJaxSpan && shouldRenderLatex && !mathjaxUpdated) {
@@ -440,107 +271,42 @@ function updateMathJax() {
 
 let timeoutId;
 let isThrottled = false;
-var mmutation
-// 监听所有元素中 bot message 的变化，用来查找需要渲染的mathjax, 并为 bot 消息添加复制按钮。
-var mObserver = new MutationObserver(function (mutationsList) {
-    for (mmutation of mutationsList) {
-        if (mmutation.type === 'childList') {
-            for (var node of mmutation.addedNodes) {
-                if (node.nodeType === 1 && node.classList.contains('message') && node.getAttribute('data-testid') === 'bot') {
-                    if (shouldRenderLatex) {
+// 监听所有元素中message的变化，用来查找需要渲染的mathjax
+var mObserver = new MutationObserver(function (mutationsList, observer) {
+    if (shouldRenderLatex) {
+        for (var mutation of mutationsList) {
+            if (mutation.type === 'childList') {
+                for (var node of mutation.addedNodes) {
+                    if (node.nodeType === 1 && node.classList.contains('message') && node.classList.contains('bot')) {
+                        // console.log("added");
                         renderMathJax();
                         mathjaxUpdated = false;
                     }
-                    saveHistoryHtml();
-                    document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot').forEach(addChuanhuButton);
-                    document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot pre').forEach(addCopyCodeButton);
                 }
-            }
-            for (var node of mmutation.removedNodes) {
-                if (node.nodeType === 1 && node.classList.contains('message') && node.getAttribute('data-testid') === 'bot') {
-                    if (shouldRenderLatex) {
+                for (var node of mutation.removedNodes) {
+                    if (node.nodeType === 1 && node.classList.contains('message') && node.classList.contains('bot')) {
+                        // console.log("removed");
                         renderMathJax();
                         mathjaxUpdated = false;
                     }
-                    saveHistoryHtml();
-                    document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot').forEach(addChuanhuButton);
-                    document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot pre').forEach(addCopyCodeButton);
                 }
-            }
-        } else if (mmutation.type === 'attributes') {
-            if (mmutation.target.nodeType === 1 && mmutation.target.classList.contains('message') && mmutation.target.getAttribute('data-testid') === 'bot') {
-                document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot pre').forEach(addCopyCodeButton); // 目前写的是有点问题的，会导致加button次数过多，但是bot对话内容生成时又是不断覆盖pre的……
-                if (isThrottled) break; // 为了防止重复不断疯狂渲染，加上等待_(:з」∠)_
-                isThrottled = true;
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => {
-                    isThrottled = false;
-                    if (shouldRenderLatex) {
+            } else if (mutation.type === 'attributes') {
+                if (mutation.target.nodeType === 1 && mutation.target.classList.contains('message') && mutation.target.classList.contains('bot')) {
+                    if (isThrottled) break; // 为了防止重复不断疯狂渲染，加上等待_(:з」∠)_
+                    isThrottled = true; 
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => {
+                        isThrottled = false;
+                        // console.log("changed");
                         renderMathJax();
                         mathjaxUpdated = false;
-                    }
-                    document.querySelectorAll('#chuanhu_chatbot>.wrap>.message-wrap .message.bot').forEach(addChuanhuButton);
-                    saveHistoryHtml();
-                }, 500);
+                    }, 500);
+                }
             }
         }
     }
 });
-mObserver.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
-
-var loadhistorytime = 0; // for debugging
-function saveHistoryHtml() {
-    var historyHtml = document.querySelector('#chuanhu_chatbot > .wrap');
-    localStorage.setItem('chatHistory', historyHtml.innerHTML);
-    console.log("History Saved")
-    historyLoaded = false;
-}
-function loadHistoryHtml() {
-    var historyHtml = localStorage.getItem('chatHistory');
-    if (!historyHtml) {
-        historyLoaded = true;
-        return; // no history, do nothing
-    }
-    userLogged = localStorage.getItem('userLogged');
-    if (userLogged){
-        historyLoaded = true;
-        return; // logged in, do nothing
-    }
-    if (!historyLoaded) {
-        var tempDiv = document.createElement('div');
-        tempDiv.innerHTML = historyHtml;
-        var buttons = tempDiv.querySelectorAll('button.chuanhu-btn');
-        for (var i = 0; i < buttons.length; i++) {
-            buttons[i].parentNode.removeChild(buttons[i]);
-        }
-        var fakeHistory = document.createElement('div');
-        fakeHistory.classList.add('history-message');
-        fakeHistory.innerHTML = tempDiv.innerHTML;
-        chatbotWrap.insertBefore(fakeHistory, chatbotWrap.firstChild);
-        // var fakeHistory = document.createElement('div');
-        // fakeHistory.classList.add('history-message');
-        // fakeHistory.innerHTML = historyHtml;
-        // chatbotWrap.insertBefore(fakeHistory, chatbotWrap.firstChild);
-        historyLoaded = true;
-        console.log("History Loaded");
-        loadhistorytime += 1; // for debugging
-    } else {
-        historyLoaded = false;
-    }
-}
-function clearHistoryHtml() {
-    localStorage.removeItem("chatHistory");
-    historyMessages = chatbotWrap.querySelector('.history-message');
-    if (historyMessages) {
-        chatbotWrap.removeChild(historyMessages);
-        console.log("History Cleared");
-    }
-}
-function emptyHistory() {
-    empty_botton.addEventListener("click", function () {
-        clearHistoryHtml();
-    });
-}
+mObserver.observe(targetNode, { attributes: true, childList: true, subtree: true });
 
 // 监视页面内部 DOM 变动
 var observer = new MutationObserver(function (mutations) {
@@ -551,14 +317,7 @@ observer.observe(targetNode, { childList: true, subtree: true });
 // 监视页面变化
 window.addEventListener("DOMContentLoaded", function () {
     isInIframe = (window.self !== window.top);
-    historyLoaded = false;
 });
 window.addEventListener('resize', setChatbotHeight);
 window.addEventListener('scroll', setChatbotHeight);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", adjustDarkMode);
-
-// button svg code
-const copyIcon   = '<span><svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height=".8em" width=".8em" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>';
-const copiedIcon = '<span><svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height=".8em" width=".8em" xmlns="http://www.w3.org/2000/svg"><polyline points="20 6 9 17 4 12"></polyline></svg></span>';
-const mdIcon     = '<span><svg stroke="currentColor" fill="none" stroke-width="1" viewBox="0 0 14 18" stroke-linecap="round" stroke-linejoin="round" height=".8em" width=".8em" xmlns="http://www.w3.org/2000/svg"><g transform-origin="center" transform="scale(0.85)"><path d="M1.5,0 L12.5,0 C13.3284271,-1.52179594e-16 14,0.671572875 14,1.5 L14,16.5 C14,17.3284271 13.3284271,18 12.5,18 L1.5,18 C0.671572875,18 1.01453063e-16,17.3284271 0,16.5 L0,1.5 C-1.01453063e-16,0.671572875 0.671572875,1.52179594e-16 1.5,0 Z" stroke-width="1.8"></path><line x1="3.5" y1="3.5" x2="10.5" y2="3.5"></line><line x1="3.5" y1="6.5" x2="8" y2="6.5"></line></g><path d="M4,9 L10,9 C10.5522847,9 11,9.44771525 11,10 L11,13.5 C11,14.0522847 10.5522847,14.5 10,14.5 L4,14.5 C3.44771525,14.5 3,14.0522847 3,13.5 L3,10 C3,9.44771525 3.44771525,9 4,9 Z" stroke="none" fill="currentColor"></path></svg></span>';
-const rawIcon    = '<span><svg stroke="currentColor" fill="none" stroke-width="1.8" viewBox="0 0 18 14" stroke-linecap="round" stroke-linejoin="round" height=".8em" width=".8em" xmlns="http://www.w3.org/2000/svg"><g transform-origin="center" transform="scale(0.85)"><polyline points="4 3 0 7 4 11"></polyline><polyline points="14 3 18 7 14 11"></polyline><line x1="12" y1="0" x2="6" y2="14"></line></g></svg></span>';

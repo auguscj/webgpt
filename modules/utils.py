@@ -13,6 +13,7 @@ import html
 import sys
 import subprocess
 
+
 import gradio as gr
 from pypinyin import lazy_pinyin
 import tiktoken
@@ -25,7 +26,10 @@ import pandas as pd
 
 from modules.presets import *
 from . import shared
-from modules.config import retrieve_proxy, hide_history_when_not_logged_in
+from modules.config import retrieve_proxy
+
+import redis
+redis_db = redis.StrictRedis(host="localhost", port=6379, password="")
 
 if TYPE_CHECKING:
     from typing import TypedDict
@@ -33,6 +37,148 @@ if TYPE_CHECKING:
     class DataframeData(TypedDict):
         headers: List[str]
         data: List[List[str | int | bool]]
+
+
+
+def check_count(username):
+    storage_str = redis_db.get(f"user:{username}")
+    storage_str = str(storage_str, 'utf-8')
+    userinfo = storage_str.split("|")
+    left_count = userinfo[2]
+    if int(left_count)<=0:
+        return False,"您余额不足啦,需要充值次数后方可使用,谢谢"
+    else:
+        return True,"成功"
+
+def reduce_count(username):
+    try:
+        storage_str = redis_db.get(f"user:{username}")
+        storage_str = str(storage_str, 'utf-8')
+        userinfo = storage_str.split("|")
+        left_count = userinfo[2]
+        password = userinfo[1]
+        usertype = userinfo[3]
+        registerDate = userinfo[4]
+        recommender = userinfo[5]
+        new_left_count = int(left_count)-1
+        storage_string = assemble_userinfo(username, password, new_left_count, usertype, registerDate, recommender)
+        # storage_str = username+"|"+password+"|"+str(new_left_count)
+        redis_db.set(f"user:{username}", storage_string)
+        return True
+    except:
+        return False
+
+def assemble_userinfo(username,password,count,userType,registerDate,recommender):
+    # 组装用户string
+    storage_str = username + "|" + password + "|" + str(count) + "|"+userType+"|" + registerDate + "|"+recommender
+    return storage_str
+
+def return_storage_userString_list(username):
+    # 根据用户名返回他存储的string
+    storage_str = redis_db.get(f"user:{username}")
+    storage_str = str(storage_str, 'utf-8')
+    userinfo = storage_str.split("|")
+    return userinfo
+
+def login(username,password):
+    # 1 验证长度
+    if len(username)>11:
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Markdown.update(value="用户名长度超出限制"),"Notlogin"
+    if len(password)>20:
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Markdown.update(value="密码长度超出限制"),"Notlogin"
+    # 2 查找用户是否存在
+    if not redis_db.exists(f"user:{username}"):
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True), gr.Markdown.update(value="用户不存在:"+username),"Notlogin"
+    else:
+        # 3 验证密码
+        storage_str = redis_db.get(f"user:{username}")
+        storage_str = str(storage_str,'utf-8')
+        userinfo = storage_str.split("|")
+        storage_password=userinfo[1]
+        if password!=storage_password:
+            return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Textbox.update(visible=True), gr.Markdown.update(value="密码不对!"),"Notlogin"
+        # 登录成功会吧用户名密码存在一个地方，用户每次询问的时候带上用户名和密码，以便查询剩余额度
+        return gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Button.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Button.update(visible=False),gr.Textbox.update(visible=False),gr.Markdown.update(value="登录成功，欢迎 " +" "+ username + "!"),username
+        # return gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Button.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Button.update(visible=False),"Welcome" +" "+ username + "!",username
+
+def register(username,password1,password2):
+    # username|password|count|(free/paid)|registerDate|recommender
+    # 0 验证是否输入为空
+    if not bool(username) or not bool(password1):
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Markdown.update(value="用户名密码不能为空!")
+    # 1 验证密码是否一致
+    if password1!=password2:
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Markdown.update(value="两次输入的密码不匹配!")
+    # 2.1 验证长度
+    if len(username)>20 or len(password1)>20:
+        return gr.Textbox.update(visible=False),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Markdown.update(value="用户名或密码长度超出限制!")
+    # 2.2 验证长度
+    if len(username) < 6 or len(password1) < 6:
+        return gr.Textbox.update(visible=False),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Markdown.update(value="用户名或密码长度太短")
+    # 3 查找是否存在
+    if not redis_db.exists(f"user:{username}"):  # 新用户
+        registerDate = datetime.datetime.today().strftime("%Y-%m-%d")
+        storage_string = assemble_userinfo(username,password1,3,"free",registerDate,"none")
+        redis_db.set(f"user:{username}", storage_string)
+        return gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Textbox.update(visible=False),gr.Button.update(visible=False),gr.Markdown.update(value="注册成功:"+username+" 请登录后使用,您有三次免费咨询的机会")
+    else:
+        return gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Textbox.update(visible=True),gr.Button.update(visible=True),gr.Markdown.update(value="用户已经存在,请输入一个用户名!")
+
+def charge_count(username,money,recommender="none"):
+    import random
+    import math
+    try:
+        money = int(money)
+    except ValueError:
+        return "充值失败,您输入金额不是数字"
+    money = math.ceil(money)  # 向上取整
+    if money <= 0:
+        return "充值失败,充值数额不能小于0"
+
+    flag=5 # 默认5倍系数，也就是1块钱5次
+    if money < 50:
+        flag = 5
+    elif money < 100:
+        flag = 6
+    elif money >= 100:
+        flag = 7
+
+    available_count = money * flag
+    if not redis_db.exists(f"user:{username}"):  # 如果充值的用户不存在则创建该用户，并且设置随机默认密码
+        password = username + str(random.randint(0, 100)) + str(random.randint(0, 9)) + str(
+            random.randint(0, 9)) + str(random.randint(0, 9))
+        storage_string = username + "|" + password + "|" + str(available_count)
+        # storage_str(username)
+        redis_db.set(f"user:{username}", storage_string)
+        return f"充值成功，因为您输入的账号不存在，已经为您自动创建{username}的账号，密码是{password},您可以使用的次数为{str(available_count)}次"
+    else:
+        userinfo = return_storage_userString_list(username)
+        password = userinfo[1]
+        left_count = userinfo[2]
+        usertype = userinfo[3]
+        registerDate = userinfo[4]
+        recommender_old = userinfo[5]
+        new_count = int(left_count) + available_count
+        # 首先给充值人充值
+        storage_string = assemble_userinfo(username, password, new_count, usertype, registerDate, recommender_old)
+        redis_db.set(f"user:{username}", storage_string)
+        return_message = f"充值成功，已经为账号{username}充值{str(available_count)}次数,充值后剩余的次数为{str(new_count)}次."
+        message2 = ""
+        if recommender != "none":
+            # 如果推荐人字段有值，则推荐人也给充值，原则是充值人金额的20%
+            available_count = money * flag * 0.2
+            userinfo = return_storage_userString_list(username)
+            password = userinfo[1]
+            left_count = userinfo[2]
+            usertype = userinfo[3]
+            registerDate = userinfo[4]
+            recommender_old = userinfo[5]
+            new_count = int(left_count) + available_count
+            new_storage_str = assemble_userinfo(username,password,new_count,usertype,registerDate,recommender_old)
+            redis_db.set(f"user:{username}", new_storage_str)
+            message2 = f"推荐人{username}也充值成功，充值{str(available_count)}次数,充值后剩余的次数为{str(new_count)}次"
+        charge_result = return_message + message2
+        return charge_result
 
 def predict(current_model, *args):
     iter = current_model.predict(*args)
@@ -75,9 +221,6 @@ def export_markdown(current_model, *args):
     return current_model.export_markdown(*args)
 
 def load_chat_history(current_model, *args):
-    return current_model.load_chat_history(*args)
-
-def upload_chat_history(current_model, *args):
     return current_model.load_chat_history(*args)
 
 def set_token_upper_limit(current_model, *args):
@@ -183,7 +326,6 @@ def convert_mdtext(md_text):
     non_code_parts = code_block_pattern.split(md_text)[::2]
 
     result = []
-    raw = f'<div class="raw-message hideM">{html.escape(md_text)}</div>'
     for non_code, code in zip(non_code_parts, code_blocks + [""]):
         if non_code.strip():
             non_code = normalize_markdown(non_code)
@@ -195,10 +337,8 @@ def convert_mdtext(md_text):
             code = markdown_to_html_with_syntax_highlight(code)
             result.append(code)
     result = "".join(result)
-    output = f'<div class="md-message">{result}</div>'
-    output += raw
-    output += ALREADY_CONVERTED_MARK
-    return output
+    result += ALREADY_CONVERTED_MARK
+    return result
 
 
 def convert_asis(userinput):
@@ -249,11 +389,8 @@ def save_file(filename, system, history, chatbot, user_name):
     os.makedirs(os.path.join(HISTORY_DIR, user_name), exist_ok=True)
     if filename.endswith(".json"):
         json_s = {"system": system, "history": history, "chatbot": chatbot}
-        if "/" in filename or "\\" in filename:
-            history_file_path = filename
-        else:
-            history_file_path = os.path.join(HISTORY_DIR, user_name, filename)
-        with open(history_file_path, "w") as f:
+        print(json_s)
+        with open(os.path.join(HISTORY_DIR, user_name, filename), "w") as f:
             json.dump(json_s, f)
     elif filename.endswith(".md"):
         md_s = f"system: \n- {system} \n"
@@ -289,10 +426,7 @@ def get_file_names(dir, plain=False, filetypes=[".json"]):
 
 def get_history_names(plain=False, user_name=""):
     logging.debug(f"从用户 {user_name} 中获取历史记录文件名列表")
-    if user_name == "" and hide_history_when_not_logged_in:
-        return ""
-    else:
-        return get_file_names(os.path.join(HISTORY_DIR, user_name), plain)
+    return get_file_names(os.path.join(HISTORY_DIR, user_name), plain)
 
 
 def load_template(filename, mode=0):
@@ -320,9 +454,7 @@ def load_template(filename, mode=0):
         )
 
 
-def get_template_names(plain=False):
-    logging.debug("获取模板文件名列表")
-    return get_file_names(TEMPLATES_DIR, plain, filetypes=[".csv", "json"])
+
 
 
 def get_template_content(templates, selection, original_system_prompt):
@@ -394,16 +526,16 @@ def get_geoip():
         logging.warning(f"无法获取IP地址信息。\n{data}")
         if data["reason"] == "RateLimited":
             return (
-                i18n("您的IP区域：未知。")
+                str("您的IP区域：未知。")
             )
         else:
-            return i18n("获取IP地理位置失败。原因：") + f"{data['reason']}" + i18n("。你仍然可以使用聊天功能。")
+            return str("获取IP地理位置失败。原因：") + f"{data['reason']}" + str("。你仍然可以使用聊天功能。")
     else:
         country = data["country_name"]
         if country == "China":
             text = "**您的IP区域：中国。请立即检查代理设置，在不受支持的地区使用API可能导致账号被封禁。**"
         else:
-            text = i18n("您的IP区域：") + f"{country}。"
+            text = str("您的IP区域：") + f"{country}。"
         logging.info(text)
         return text
 
@@ -459,8 +591,8 @@ def run(command, desc=None, errdesc=None, custom_env=None, live=False):
         result = subprocess.run(command, shell=True, env=os.environ if custom_env is None else custom_env)
         if result.returncode != 0:
             raise RuntimeError(f"""{errdesc or 'Error running command'}.
-                Command: {command}
-                Error code: {result.returncode}""")
+Command: {command}
+Error code: {result.returncode}""")
 
         return ""
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=os.environ if custom_env is None else custom_env)
@@ -483,7 +615,7 @@ def versions_html():
         commit_hash = "<none>"
     if commit_hash != "<none>":
         short_commit = commit_hash[0:7]
-        commit_info = f"<a style=\"text-decoration:none;color:inherit\" href=\"https://github.com/GaiZhenbiao/ChuanhuChatGPT/commit/{short_commit}\">{short_commit}</a>"
+        commit_info = f"<a style=\"text-decoration:none\" href=\"https://github.com/GaiZhenbiao/ChuanhuChatGPT/commit/{short_commit}\">{short_commit}</a>"
     else:
         commit_info = "unknown \U0001F615"
     return f"""
@@ -491,7 +623,7 @@ def versions_html():
          • 
         Gradio: {gr.__version__}
          • 
-        <a style="text-decoration:none;color:inherit" href="https://github.com/GaiZhenbiao/ChuanhuChatGPT">ChuanhuChat</a>: {commit_info}
+        Commit: {commit_info}
         """
 
 def add_source_numbers(lst, source_name = "Source", use_source = True):
@@ -547,46 +679,11 @@ def get_model_source(model_name, alternative_source):
     if model_name == "gpt2-medium":
         return "https://huggingface.co/gpt2-medium"
 
-def refresh_ui_elements_on_load(current_model, selected_model_name, user_name):
-    current_model.set_user_identifier(user_name)
-    return toggle_like_btn_visibility(selected_model_name), *current_model.auto_load()
+def refresh_ui_elements_on_load(current_model, selected_model_name):
+    return toggle_like_btn_visibility(selected_model_name)
 
 def toggle_like_btn_visibility(selected_model_name):
     if selected_model_name == "xmchat":
         return gr.update(visible=True)
     else:
         return gr.update(visible=False)
-
-def new_auto_history_filename(dirname):
-    latest_file = get_latest_filepath(dirname)
-    if latest_file:
-        with open(os.path.join(dirname, latest_file), 'r') as f:
-            if len(f.read()) == 0:
-                return latest_file
-    now = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    return f'{now}.json'
-
-def get_latest_filepath(dirname):
-    pattern = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}')
-    latest_time = None
-    latest_file = None
-    for filename in os.listdir(dirname):
-        if os.path.isfile(os.path.join(dirname, filename)):
-            match = pattern.search(filename)
-            if match and match.group(0) == filename[:19]:
-                time_str = filename[:19]
-                filetime = datetime.datetime.strptime(time_str, '%Y-%m-%d_%H-%M-%S')
-                if not latest_time or filetime > latest_time:
-                    latest_time = filetime
-                    latest_file = filename
-    return latest_file
-
-def get_history_filepath(username):
-    dirname = os.path.join(HISTORY_DIR, username)
-    os.makedirs(dirname, exist_ok=True)
-    latest_file = get_latest_filepath(dirname)
-    if not latest_file:
-        latest_file = new_auto_history_filename(dirname)
-
-    latest_file = os.path.join(dirname, latest_file)
-    return latest_file

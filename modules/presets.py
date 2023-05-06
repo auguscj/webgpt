@@ -2,9 +2,8 @@
 import os
 from pathlib import Path
 import gradio as gr
-from .webui_locale import I18nAuto
 
-i18n = I18nAuto()  # internationalization
+# i18n = I18nAuto()  # internationalization
 
 CHATGLM_MODEL = None
 CHATGLM_TOKENIZER = None
@@ -22,35 +21,36 @@ HISTORY_DIR = "history"
 TEMPLATES_DIR = "templates"
 
 # 错误信息
-STANDARD_ERROR_MSG = i18n("☹️发生了错误：")  # 错误信息的标准前缀
-GENERAL_ERROR_MSG = i18n("获取对话时发生错误，请查看后台日志")
-ERROR_RETRIEVE_MSG = i18n("请检查网络连接，或者API-Key是否有效。")
-CONNECTION_TIMEOUT_MSG = i18n("连接超时，无法获取对话。")  # 连接超时
-READ_TIMEOUT_MSG = i18n("读取超时，无法获取对话。")  # 读取超时
-PROXY_ERROR_MSG = i18n("代理错误，无法获取对话。")  # 代理错误
-SSL_ERROR_PROMPT = i18n("SSL错误，无法获取对话。")  # SSL 错误
-NO_APIKEY_MSG = i18n("API key为空，请检查是否输入正确。")  # API key 长度不足 51 位
-NO_INPUT_MSG = i18n("请输入对话内容。")  # 未输入对话内容
-BILLING_NOT_APPLICABLE_MSG = i18n("账单信息不适用") # 本地运行的模型返回的账单信息
+STANDARD_ERROR_MSG = str("☹️发生了错误：")  # 错误信息的标准前缀
+GENERAL_ERROR_MSG = str("获取对话时发生错误，请查看后台日志")
+ERROR_RETRIEVE_MSG = str("请检查网络连接，或者API-Key是否有效。")
+CONNECTION_TIMEOUT_MSG = str("连接超时，无法获取对话。")  # 连接超时
+READ_TIMEOUT_MSG = str("读取超时，无法获取对话。")  # 读取超时
+PROXY_ERROR_MSG = str("代理错误，无法获取对话。")  # 代理错误
+SSL_ERROR_PROMPT = str("SSL错误，无法获取对话。")  # SSL 错误
+NO_APIKEY_MSG = str("API key为空，请检查是否输入正确。")  # API key 长度不足 51 位
+NO_INPUT_MSG = str("请输入对话内容。")  # 未输入对话内容
+BILLING_NOT_APPLICABLE_MSG = str("账单信息不适用") # 本地运行的模型返回的账单信息
 
 TIMEOUT_STREAMING = 60  # 流式对话时的超时时间
 TIMEOUT_ALL = 200  # 非流式对话时的超时时间
 ENABLE_STREAMING_OPTION = True  # 是否启用选择选择是否实时显示回答的勾选框
 HIDE_MY_KEY = False  # 如果你想在UI中隐藏你的 API 密钥，将此值设置为 True
-CONCURRENT_COUNT = 100 # 允许同时使用的用户数量
+CONCURRENT_COUNT = 300 # 允许同时使用的用户数量
 
 SIM_K = 5
 INDEX_QUERY_TEMPRATURE = 1.0
 
-CHUANHU_TITLE = i18n("川虎Chat 🚀")
+CHUANHU_TITLE = str("ChatGPT")
 
-CHUANHU_DESCRIPTION = i18n("由Bilibili [土川虎虎虎](https://space.bilibili.com/29125536) 和 [明昭MZhao](https://space.bilibili.com/24807452)开发<br />访问川虎Chat的 [GitHub项目](https://github.com/GaiZhenbiao/ChuanhuChatGPT) 下载最新版脚本")
+# CHUANHU_DESCRIPTION = str("由Bilibili [土川虎虎虎](https://space.bilibili.com/29125536) 和 [明昭MZhao](https://space.bilibili.com/24807452)开发<br />访问川虎Chat的 [GitHub项目](https://github.com/GaiZhenbiao/ChuanhuChatGPT) 下载最新版脚本")
+CHUANHU_DESCRIPTION = str("")
 
 FOOTER = """<div class="versions">{versions}</div>"""
 
 APPEARANCE_SWITCHER = """
 <div style="display: flex; justify-content: space-between;">
-<span style="margin-top: 4px !important;">"""+ i18n("切换亮暗色主题")  + """</span>
+<span style="margin-top: 4px !important;">"""+ str("切换亮暗色主题")  + """</span>
 <span><label class="apSwitch" for="checkbox">
     <input type="checkbox" id="checkbox">
     <div class="apSlider"></div>
@@ -107,18 +107,18 @@ MODEL_TOKEN_LIMIT = {
 }
 
 TOKEN_OFFSET = 1000 # 模型的token上限减去这个值，得到软上限。到达软上限之后，自动尝试减少token占用。
-DEFAULT_TOKEN_LIMIT = 3000 # 默认的token上限
+DEFAULT_TOKEN_LIMIT = 1500 # 默认的token上限
 REDUCE_TOKEN_FACTOR = 0.5 # 与模型token上限想乘，得到目标token数。减少token占用时，将token占用减少到目标token数以下。
 
 REPLY_LANGUAGES = [
     "简体中文",
-    "繁體中文",
-    "English",
-    "日本語",
-    "Español",
-    "Français",
-    "Deutsch",
-    "跟随问题语言（不稳定）"
+    # "繁體中文",
+    # "English",
+    # "日本語",
+    # "Español",
+    # "Français",
+    # "Deutsch",
+    # "跟随问题语言（不稳定）"
 ]
 
 
@@ -164,7 +164,7 @@ ALREADY_CONVERTED_MARK = "<!-- ALREADY CONVERTED BY PARSER. -->"
 
 small_and_beautiful_theme = gr.themes.Soft(
         primary_hue=gr.themes.Color(
-            c50="rgba(2, 193, 96, 0.1)",
+            c50="#02C160",
             c100="rgba(2, 193, 96, 0.2)",
             c200="#02C160",
             c300="rgba(2, 193, 96, 0.32)",

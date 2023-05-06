@@ -19,12 +19,10 @@ __all__ = [
     "advance_docs",
     "update_doc_config",
     "render_latex",
-    "usage_limit",
     "multi_api_key",
     "server_name",
     "server_port",
     "share",
-    "hide_history_when_not_logged_in"
 ]
 
 # 添加一个统一的config文件，避免文件过多造成的疑惑（优先级最低）
@@ -37,8 +35,6 @@ else:
 
 lang_config = config.get("language", "auto")
 language = os.environ.get("LANGUAGE", lang_config)
-
-hide_history_when_not_logged_in = config.get("hide_history_when_not_logged_in", False)
 
 if os.path.exists("api_key.txt"):
     logging.info("检测到api_key.txt文件，正在进行迁移...")
@@ -82,8 +78,6 @@ if render_latex:
     os.environ["RENDER_LATEX"] = "yes"
 else:
     os.environ["RENDER_LATEX"] = "no"
-
-usage_limit = os.environ.get("USAGE_LIMIT", config.get("usage_limit", 120))
 
 ## 多账户机制
 multi_api_key = config.get("multi_api_key", False) # 是否开启多账户机制

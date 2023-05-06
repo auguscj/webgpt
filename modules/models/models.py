@@ -25,7 +25,7 @@ from ..presets import *
 from ..llama_func import *
 from ..utils import *
 from .. import shared
-from ..config import retrieve_proxy, usage_limit
+from ..config import retrieve_proxy
 from modules import config
 from .base_model import BaseLLMModel, ModelType
 
@@ -38,14 +38,12 @@ class OpenAIClient(BaseLLMModel):
         system_prompt=INITIAL_SYSTEM_PROMPT,
         temperature=1.0,
         top_p=1.0,
-        user_name=""
     ) -> None:
         super().__init__(
             model_name=model_name,
             temperature=temperature,
             top_p=top_p,
             system_prompt=system_prompt,
-            user=user_name
         )
         self.api_key = api_key
         self.need_api_key = True
@@ -89,20 +87,9 @@ class OpenAIClient(BaseLLMModel):
                 usage_data = self._get_billing_data(usage_url)
             except Exception as e:
                 logging.error(f"获取API使用情况失败:" + str(e))
-                return i18n("**获取API使用情况失败**")
-            # rounded_usage = "{:.5f}".format(usage_data["total_usage"] / 100)
-            rounded_usage = round(usage_data["total_usage"] / 100, 5)
-            usage_percent = round(usage_data["total_usage"] / usage_limit, 2)
-            # return i18n("**本月使用金额** ") + f"\u3000 ${rounded_usage}"
-            return """\
-                <b>""" + i18n("本月使用金额") + f"""</b>
-                <div class="progress-bar">
-                    <div class="progress" style="width: {usage_percent}%;">
-                        <span class="progress-text">{usage_percent}%</span>
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: space-between;"><span>${rounded_usage}</span><span>${usage_limit}</span></div>
-                """
+                return str("**获取API使用情况失败**")
+            rounded_usage = "{:.5f}".format(usage_data["total_usage"] / 100)
+            return str("**本月使用金额** ") + f"\u3000 ${rounded_usage}"
         except requests.exceptions.ConnectTimeout:
             status_text = (
                 STANDARD_ERROR_MSG + CONNECTION_TIMEOUT_MSG + ERROR_RETRIEVE_MSG
@@ -114,7 +101,7 @@ class OpenAIClient(BaseLLMModel):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            logging.error(i18n("获取API使用情况失败:") + str(e))
+            logging.error(str("获取API使用情况失败:") + str(e))
             return STANDARD_ERROR_MSG + ERROR_RETRIEVE_MSG
 
     def set_token_upper_limit(self, new_upper_limit):
@@ -135,6 +122,7 @@ class OpenAIClient(BaseLLMModel):
         if system_prompt is not None:
             history = [construct_system(system_prompt), *history]
 
+
         payload = {
             "model": self.model_name,
             "messages": history,
@@ -152,7 +140,7 @@ class OpenAIClient(BaseLLMModel):
             payload["stop"] = self.stop_sequence
         if self.logit_bias is not None:
             payload["logit_bias"] = self.logit_bias
-        if self.user_identifier:
+        if self.user_identifier is not None:
             payload["user"] = self.user_identifier
 
         if stream:
@@ -208,7 +196,7 @@ class OpenAIClient(BaseLLMModel):
                 try:
                     chunk = json.loads(chunk[6:])
                 except json.JSONDecodeError:
-                    print(i18n("JSON解析错误,收到的内容: ") + f"{chunk}")
+                    print(str("JSON解析错误,收到的内容: ") + f"{chunk}")
                     error_msg += chunk
                     continue
                 if chunk_length > 6 and "delta" in chunk["choices"][0]:
@@ -229,8 +217,8 @@ class OpenAIClient(BaseLLMModel):
 
 
 class ChatGLM_Client(BaseLLMModel):
-    def __init__(self, model_name, user_name="") -> None:
-        super().__init__(model_name=model_name, user=user_name)
+    def __init__(self, model_name) -> None:
+        super().__init__(model_name=model_name)
         from transformers import AutoTokenizer, AutoModel
         import torch
         global CHATGLM_TOKENIZER, CHATGLM_MODEL
@@ -252,8 +240,8 @@ class ChatGLM_Client(BaseLLMModel):
             if "int4" in model_name:
                 quantified = True
             model = AutoModel.from_pretrained(
-                model_source, trust_remote_code=True
-            )
+                    model_source, trust_remote_code=True
+                )
             if torch.cuda.is_available():
                 # run on CUDA
                 logging.info("CUDA is available, using CUDA")
@@ -305,9 +293,8 @@ class LLaMA_Client(BaseLLMModel):
         self,
         model_name,
         lora_path=None,
-        user_name=""
     ) -> None:
-        super().__init__(model_name=model_name, user=user_name)
+        super().__init__(model_name=model_name)
         from lmflow.datasets.dataset import Dataset
         from lmflow.pipeline.auto_pipeline import AutoPipeline
         from lmflow.models.auto_model import AutoModel
@@ -407,8 +394,8 @@ class LLaMA_Client(BaseLLMModel):
 
 
 class XMChat(BaseLLMModel):
-    def __init__(self, api_key, user_name=""):
-        super().__init__(model_name="xmchat", user=user_name)
+    def __init__(self, api_key):
+        super().__init__(model_name="xmchat")
         self.api_key = api_key
         self.session_id = None
         self.reset()
@@ -455,8 +442,7 @@ class XMChat(BaseLLMModel):
     def try_read_image(self, filepath):
         def is_image_file(filepath):
             # 判断文件是否为图片
-            valid_image_extensions = [
-                ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
+            valid_image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
             file_extension = os.path.splitext(filepath)[1].lower()
             return file_extension in valid_image_extensions
 
@@ -539,6 +525,8 @@ class XMChat(BaseLLMModel):
             return response.text, len(response.text)
 
 
+
+
 def get_model(
     model_name,
     lora_model_path=None,
@@ -546,9 +534,8 @@ def get_model(
     temperature=None,
     top_p=None,
     system_prompt=None,
-    user_name=""
 ) -> BaseLLMModel:
-    msg = i18n("模型设置为了：") + f" {model_name}"
+    msg = str("模型设置为了：") + f" {model_name}"
     model_type = ModelType.get_type(model_name)
     lora_selector_visibility = False
     lora_choices = []
@@ -566,11 +553,10 @@ def get_model(
                 system_prompt=system_prompt,
                 temperature=temperature,
                 top_p=top_p,
-                user_name=user_name,
             )
         elif model_type == ModelType.ChatGLM:
             logging.info(f"正在加载ChatGLM模型: {model_name}")
-            model = ChatGLM_Client(model_name, user_name=user_name)
+            model = ChatGLM_Client(model_name)
         elif model_type == ModelType.LLaMA and lora_model_path == "":
             msg = f"现在请为 {model_name} 选择LoRA模型"
             logging.info(msg)
@@ -587,29 +573,27 @@ def get_model(
                 msg += " + No LoRA"
             else:
                 msg += f" + {lora_model_path}"
-            model = LLaMA_Client(
-                model_name, lora_model_path, user_name=user_name)
+            model = LLaMA_Client(model_name, lora_model_path)
         elif model_type == ModelType.XMChat:
             if os.environ.get("XMCHAT_API_KEY") != "":
                 access_key = os.environ.get("XMCHAT_API_KEY")
-            model = XMChat(api_key=access_key, user_name=user_name)
+            model = XMChat(api_key=access_key)
         elif model_type == ModelType.StableLM:
             from .StableLM import StableLM_Client
-            model = StableLM_Client(model_name, user_name=user_name)
+            model = StableLM_Client(model_name)
         elif model_type == ModelType.MOSS:
             from .MOSS import MOSS_Client
-            model = MOSS_Client(model_name, user_name=user_name)
+            model = MOSS_Client(model_name)
         elif model_type == ModelType.Unknown:
             raise ValueError(f"未知模型: {model_name}")
         logging.info(msg)
-        chatbot = gr.Chatbot.update(label=model_name)
     except Exception as e:
         logging.error(e)
         msg = f"{STANDARD_ERROR_MSG}: {e}"
     if dont_change_lora_selector:
-        return model, msg, chatbot
+        return model, msg
     else:
-        return model, msg, chatbot, gr.Dropdown.update(choices=lora_choices, visible=lora_selector_visibility)
+        return model, msg, gr.Dropdown.update(choices=lora_choices, visible=lora_selector_visibility)
 
 
 if __name__ == "__main__":

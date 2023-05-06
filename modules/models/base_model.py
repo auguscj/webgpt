@@ -9,7 +9,6 @@ import sys
 import requests
 import urllib3
 import traceback
-import pathlib
 
 from tqdm import tqdm
 import colorama
@@ -131,7 +130,7 @@ class BaseLLMModel:
         def get_return_value():
             return chatbot, status_text
 
-        status_text = i18n("开始实时传输回答……")
+        status_text = str("开始实时传输回答……")
         if fake_input:
             chatbot.append((fake_input, ""))
         else:
@@ -230,7 +229,6 @@ class BaseLLMModel:
                     similarity_top_k=5,
                     vector_store=index._vector_store,
                     docstore=index._docstore,
-                    response_synthesizer=None
                 )
                 query_bundle = QueryBundle(real_inputs)
                 nodes = query_object.retrieve(query_bundle)
@@ -272,21 +270,50 @@ class BaseLLMModel:
         self,
         inputs,
         chatbot,
-        stream=False,
-        use_websearch=False,
-        files=None,
-        reply_language="中文",
-        should_check_token_count=True,
+        testvalue="Notlogin"
     ):  # repetition_penalty, top_k
 
-        status_text = "开始生成回答……"
+        stream=True
+        use_websearch=False
+        files=None
+        reply_language="中文",
+        should_check_token_count=False
+
+        status_text = "开始回答……"
         logging.info(
             "输入为：" + colorama.Fore.BLUE + f"{inputs}" + colorama.Style.RESET_ALL
         )
+        ###自己的逻辑，检查是否注册，是否余额不足#########
+        if testvalue=="Notlogin":
+            yield chatbot + [(inputs, "请先登录或者注册")], "completed"
+            return
+        check_result,check_message=check_count(testvalue)
+        if not check_result:
+            yield chatbot + [(inputs, check_message)], "completed"
+            return
+
+        ########自定义一些简单的回答#############
+        if inputs.lower() in ['hi','hello']:
+            reduce_count(username=testvalue)
+            yield chatbot + [(inputs, "Hello there! How may I assist you today?")], "completed"
+            return
+
+        if inputs.lower() in ['你好','你好呀']:
+            reduce_count(username=testvalue)
+            yield chatbot + [(inputs, "你好,有什么我能帮你的吗")], "completed"
+            return
+
+        if inputs.lower() in ['谢谢','感谢','谢谢你','非常感谢']:
+            reduce_count(username=testvalue)
+            yield chatbot + [(inputs, "不客气,随时为您效劳")], "completed"
+            return
+        ######################
+
         if should_check_token_count:
             yield chatbot + [(inputs, "")], status_text
         if reply_language == "跟随问题语言（不稳定）":
             reply_language = "the same language as the question, such as English, 中文, 日本語, Español, Français, or Deutsch."
+
 
         limited_context, fake_inputs, display_append, inputs, chatbot = self.prepare_inputs(real_inputs=inputs, use_websearch=use_websearch, files=files, reply_language=reply_language, chatbot=chatbot)
         yield chatbot + [(fake_inputs, "")], status_text
@@ -318,6 +345,9 @@ class BaseLLMModel:
             self.all_token_counts = []
         self.history.append(construct_user(inputs))
 
+
+        ######## 给所有的提问都加一个简洁回答，用来节约token#########
+        inputs = inputs + ",简洁回答"
         try:
             if stream:
                 logging.debug("使用流式传输")
@@ -350,7 +380,9 @@ class BaseLLMModel:
                 + f"{self.history[-1]['content']}"
                 + colorama.Style.RESET_ALL
             )
-
+        #########回答后扣一次#########
+        reduce_count(username=testvalue)
+        ####################
         if limited_context:
             # self.history = self.history[-4:]
             # self.all_token_counts = self.all_token_counts[-2:]
@@ -372,8 +404,6 @@ class BaseLLMModel:
             logging.info(status_text)
             status_text = f"为了防止token超限，模型忘记了早期的 {count} 轮对话"
             yield chatbot, status_text
-
-        self.auto_save(chatbot)
 
     def retry(
         self,
@@ -474,7 +504,7 @@ class BaseLLMModel:
 
     def set_key(self, new_access_key):
         self.api_key = new_access_key.strip()
-        msg = i18n("API密钥更改为了") + hide_middle_chars(self.api_key)
+        msg = str("API密钥更改为了") + hide_middle_chars(self.api_key)
         logging.info(msg)
         return self.api_key, msg
 
@@ -485,7 +515,6 @@ class BaseLLMModel:
         self.history = []
         self.all_token_counts = []
         self.interrupted = False
-        pathlib.Path(os.path.join(HISTORY_DIR, self.user_identifier, new_auto_history_filename(os.path.join(HISTORY_DIR, self.user_identifier)))).touch()
         return [], self.token_message([0])
 
     def delete_first_conversation(self):
@@ -512,12 +541,13 @@ class BaseLLMModel:
         return chatbot, msg
 
     def token_message(self, token_lst=None):
+        return str("Completed")
         if token_lst is None:
             token_lst = self.all_token_counts
         token_sum = 0
         for i in range(len(token_lst)):
             token_sum += sum(token_lst[: i + 1])
-        return i18n("Token 计数: ") + f"{sum(token_lst)}" + i18n("，本次对话累计消耗了 ") + f"{token_sum} tokens"
+        return str("Token 计数: ") + f"{sum(token_lst)}" + str("，本次对话累计消耗了 ") + f"{token_sum} tokens"
 
     def save_chat_history(self, filename, chatbot, user_name):
         if filename == "":
@@ -526,10 +556,6 @@ class BaseLLMModel:
             filename += ".json"
         return save_file(filename, self.system_prompt, self.history, chatbot, user_name)
 
-    def auto_save(self, chatbot):
-        history_file_path = get_history_filepath(self.user_identifier)
-        save_file(history_file_path, self.system_prompt, self.history, chatbot, self.user_identifier)
-
     def export_markdown(self, filename, chatbot, user_name):
         if filename == "":
             return
@@ -537,17 +563,12 @@ class BaseLLMModel:
             filename += ".md"
         return save_file(filename, self.system_prompt, self.history, chatbot, user_name)
 
-    def load_chat_history(self, filename, user_name):
+    def load_chat_history(self, filename, chatbot, user_name):
         logging.debug(f"{user_name} 加载对话历史中……")
-        logging.info(f"filename: {filename}")
-        if type(filename) != str and filename is not None:
+        if type(filename) != str:
             filename = filename.name
         try:
-            if "/" not in filename:
-                history_file_path = os.path.join(HISTORY_DIR, user_name, filename)
-            else:
-                history_file_path = filename
-            with open(history_file_path, "r") as f:
+            with open(os.path.join(HISTORY_DIR, user_name, filename), "r") as f:
                 json_s = json.load(f)
             try:
                 if type(json_s["history"][0]) == str:
@@ -561,23 +582,14 @@ class BaseLLMModel:
                     json_s["history"] = new_history
                     logging.info(new_history)
             except:
+                # 没有对话历史
                 pass
             logging.debug(f"{user_name} 加载对话历史完毕")
             self.history = json_s["history"]
-            return os.path.basename(filename), json_s["system"], json_s["chatbot"]
-        except:
-            # 没有对话历史或者对话历史解析失败
-            logging.info(f"没有找到对话历史记录 {filename}")
-            return gr.update(), self.system_prompt, gr.update()
-
-    def auto_load(self):
-        if self.user_identifier == "":
-            self.reset()
-            return self.system_prompt, gr.update()
-        history_file_path = get_history_filepath(self.user_identifier)
-        filename, system_prompt, chatbot = self.load_chat_history(history_file_path, self.user_identifier)
-        return system_prompt, chatbot
-
+            return filename, json_s["system"], json_s["chatbot"]
+        except FileNotFoundError:
+            logging.warning(f"{user_name} 没有找到对话历史文件，不执行任何操作")
+            return filename, self.system_prompt, chatbot
 
     def like(self):
         """like the last response, implement if needed
