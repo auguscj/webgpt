@@ -144,4 +144,5 @@ auth.json
 lora/
 .idea
 templates/*
-assets/
+assets/qq_group.jpeg
+assets/wechat.jpeg
